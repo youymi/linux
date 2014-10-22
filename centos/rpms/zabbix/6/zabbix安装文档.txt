@@ -1,0 +1,174 @@
+zabbix 服务器端安装配置步骤
+
+一、安装
+
+前提条件
+(1) 已经安装mysql
+
+依赖
+(1) zabbix server端展现依赖php httpd
+
+
+安装步骤
+首先进入 zabbix server 安装包目录
+结构如下
+deps
+apr
+httpd
+rrdtool
+php
+zabbix-sender-2.4.0-1.el6.x86_64.rpm
+zabbix-web-mysql-2.4.0-1.el6.noarch.rpm
+zabbix-server-2.4.0-1.el6.x86_64.rpm
+zabbix-2.4.0-1.el6.x86_64.rpm
+zabbix-web-2.4.0-1.el6.noarch.rpm
+zabbix-server-mysql-2.4.0-1.el6.x86_64.rpm
+
+
+
+1.安装httpd, httpd 依赖apr
+ (1) rpm -Uvh ./apr/*.rpm --force
+ (2) rpm -Uvh ./httpd/*.rpm --force
+
+service httpd start
+
+可以编辑 /etc/httpd/conf/httpd.conf 调整端口号
+
+2.安装 php
+(1) rpm -Uvh ./php/*.rpm --force
+
+3. 分别安装 依赖包,在deps目录
+(1)  rpm -Uvh ./deps/*.rpm --force
+(2)  rpm -Uvh ./deps/php/*.rpm --force
+
+4. 安装zabbix server
+(1) rpm -Uvh ./*.rpm --force
+
+   1:zabbix                 ########################################### [ 17%]
+   2:zabbix-server          ########################################### [ 33%]
+   3:zabbix-server-mysql    ########################################### [ 50%]
+   4:zabbix-web-mysql       ########################################### [ 67%]
+   5:zabbix-web             ########################################### [ 83%]
+   6:zabbix-sender          ########################################### [100%]
+ 
+至此，server 安装完毕
+
+
+5. 安装agent（安装到需要监控的主机上）
+(1) 进入到agent安装目录
+rpm -Uvh ./*.rpm --force
+
+ 
+-----------------------------------------
+
+二、 配置
+
+1. 创建数据库
+create database zabbix character set utf8;
+grant all privileges on zabbix.* to zabbix@localhost identified by 'zabbix';
+2.导入数据库脚本
+登进msyql后执行下面命令：
+use zabbix;
+source /usr/share/doc/zabbix-server-mysql-2.4.0/create/schema.sql;
+source /usr/share/doc/zabbix-server-mysql-2.4.0/create/images.sql;
+source /usr/share/doc/zabbix-server-mysql-2.4.0/create/data.sql;
+
+3. 配置zabbix
+进入到/etc/zabbix/文件夹下，修改zabbix_server.conf，修改项目如下：
+DBHost=localhost
+DBName=zabbix
+DBUser=zabbix
+DBPassword=zabbix
+修改完成后，启动zabbix服务
+
+service zabbix-server restart
+
+
+进入到/etc/httpd/conf.d/目录下，修改zabbix.conf。修改内容如下：
+php_value max_execution_time 300
+php_value memory_limit 128M
+php_value post_max_size 16M
+php_value upload_max_filesize 2M
+php_value max_input_time 300
+php_value date.timezone Asia/Shanghai
+注意：最后date.timezone项目最前边的#要记得删掉，不然在后面打开页面进行配置时，会检测不到时区而发生错误
+修改后，重启httpd服务
+
+
+
+
+4. 配置agent,
+vi  vi /etc/zabbix/zabbix_agentd.conf 
+
+EnableRemoteCommands=1 //允许执行远程命令  
+ 
+Server=xx.xx.xx.xx //server端的ip  
+ 
+Hostname=abc //必须与zabbix创建的host name相同
+
+
+5.打开浏览器，访问127.0.0.1/zabbix地址，打开如下页面
+
+点下一步进入到预装环境检查。如果php databases support检查不通过，请检查php53-mysql是否安装，若安装请重启MySQL服务。
+
+点击下一步进入到数据库链接设置，user修改成zabbix，password输入zabbix
+
+点击下一步，进入服务详细设置，name输入zabbix
+
+点击下一步，浏览刚才进行的设置
+
+这里出现错误，是因为没有找到配置文件，点击download configuration file下载配置文件，并拷贝到页面中提示的/etc/zabbix/web/文件夹下
+
+点击retry即可通过检查
+
+完成配置后，进入登录页面，默认用户名是admin密码是zabbix
+
+
+
+6. 配置所需监控等主机（前提是管理员已经登录zabbix管理页面）
+（1）添加主机
+	Configuration → Hosts →create host
+	按提示填入 Name、Groups、IP ,其他选项默认即可, Templates 处选择一个模板,
+	save 即可成功添加设备。
+	此处可以选择Template OS Linux 模板，该模板提供linux监控的基本配置信息
+（2）在zabbix首页即可看到监控信息，Monitoring --> Graphs ，然后选择某个主机，对应等监控信息即可看到对应等图形信息。
+
+
+7.邮件预警配置
+
+如果没有mailx，先安装 mailx
+
+
+2.配置mailx/config the mailx
+
+#vi /etc/mail.rc
+
+set from=example@163.com smtp=smtp.163.com
+ 
+set smtp-auth-user=example@163.com smtp-auth-password=yourpassword
+set smtp-auth=login
+
+
+
+--------
+三、 概念术语
+
+cpu idle time  : cpu 空闲时间
+cpu user time	: 用户进程咱用cpu时间
+cpu system tiem  :	指进程占用内核的时间
+cpu iowait time	:   'iowait' is the percentage of time the CPU is idle AND there is at least one I/O in progress.
+If the CPU is idle, the kernel then determines if there is at least one I/O currently in progress to either a local disk or a remotely mounted disk (NFS) which had been initiated from that CPU. If there is, then the 'iowait' counter is incremented by one. If there is no I/O in progress that was initiated from that CPU, the 'idle' counter is incremented by one.
+
+cpu nice time : unix是多用户分时操作系统，一个主机上连很多用户。nice是一种礼让的工具，可以给自己不着急出结果的程序安排优先级（除了管理员，别人只有增加的权利——表示优先级的数字，默认是0，越大优先级越低）。比如压缩片子的进程，可以用活动监视器看进程号，然后到终端下输入renice 20 -p 进程号，就不会影响到其他操作了。当然，在你什么都不做的时候，cpu还是100%用来压片子。这个进程占的cpu就是蓝色的nice。
+
+cpu interrupt time: 中断时间百分比(％Interrupt Time) CPU忙于维护硬件中断的时间百分比。系统中的许多硬件部件，如鼠标、网络接口卡或磁盘控制 …
+
+cpu softirq time :  SoftIrq time 软中断处理时间(SoftIrq time)：系统处理软中断中断所花费的时间。st: Steal time 丢失时间(Steal time)：被强制等待...
+
+cpu steal time :
+	 Steal time is the percentage of time a virtual CPU waits for a real CPU while the hypervisor is servicing another virtual processor.
+	our virtual machine (VM) shares resources with other instances on a single host in a virtualized environment. One of the resources it shares is CPU Cycles. If your VM is one of four equally sized VMs on a physical server, its CPU usage isn't capped at 25% of all CPU cycles - it can be allowed to use more than its proportion of CPU cycles (versus memory usage, which does have hard limits).
+
+cpu context switch:  CPU上下文切换,现在linux是大多基于抢占式，CPU给每个任务一定的服务时间，当时间片轮转的时候，需要把当前状态保存下来，同时加载下一个任务，这个过程叫做上下文切换。时间片轮转的方式，使得多个任务利用一个CPU执行成为可能，但是保存现场和加载现场，也带来了性能消耗。   
+
+cpu load ： cpu使用率 
