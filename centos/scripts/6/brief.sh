@@ -26,9 +26,7 @@ echo "session    required  /lib64/security/pam_limits.so" >> /etc/pam.d/login
 
 #disable selinux
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-
-##修改下面这行
-#echo 0 > /selinux/enforce
+echo 0 > /selinux/enforce
 setenforce 0
 
 #set sshd
@@ -37,17 +35,15 @@ sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config
 service sshd restart
 
 #disbale iptables
-#service iptables stop
-#chkconfig iptables off
-#service ip6tables stop
-#chkconfig ip6tables off
-service firewall stop
-chkconfig firewall off
+service iptables stop
+chkconfig iptables off
+service ip6tables stop
+chkconfig ip6tables off
 echo "NETWORKING_IPV6=off" >> /etc/sysconfig/network
 
 #turn off other stuff
-#service cups stop
-#chkconfig cups off
+service cups stop
+chkconfig cups off
 
 #tune kernel parametres
 cat >> /etc/sysctl.conf << EOF
